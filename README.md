@@ -1,50 +1,263 @@
-# Welcome to your Expo app 👋
+# SEÑAS - Filipino Sign Language Learning App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+SEÑAS is a mobile application developed as part of an **App Development Project**. Built with **React Native** and **Expo**, the application helps users learn **Filipino Sign Language (FSL)** through interactive lessons, practice drills, achievement tracking, and progress monitoring.
 
-## Get started
+---
 
-1. Install dependencies
+## 📱 Features
 
-   ```bash
-   npm install
-   ```
+### 🎓 Interactive Lessons
 
-2. Start the app
+* Learn FSL alphabets and basic signs through guided lessons.
+* Structured learning path designed for beginners.
 
-   ```bash
-   npx expo start
-   ```
+### 🧠 Practice Drills
 
-In the output, you'll find options to open the app in a
+* Practice fingerspelling and number signs.
+* Flashcard-style learning experience.
+* Reinforce knowledge through repetition.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 🏆 Achievement System
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+* Earn badges for completing lessons.
+* Unlock milestones as you progress.
 
-## Get a fresh project
+### 📈 Progress Tracking
 
-When you're ready, run:
+* Monitor lesson completion.
+* Track performance and learning growth.
 
-```bash
-npm run reset-project
+### 👤 User Profiles
+
+* Personalized learning experience.
+* View achievements and statistics.
+
+### 🔥 Streak Tracking
+
+* Encourage consistent learning habits.
+* Track daily learning streaks.
+
+---
+
+## 🛠️ Tech Stack
+
+| Technology         | Purpose                        |
+| ------------------ | ------------------------------ |
+| React Native       | Mobile Application Development |
+| Expo               | Development Platform           |
+| TypeScript         | Type-Safe Programming          |
+| NativeWind         | Tailwind CSS for React Native  |
+| React Navigation   | Screen Navigation              |
+| @expo/vector-icons | Icons and UI Elements          |
+
+---
+
+## 📂 Project Structure
+
+```text
+senas_danah/
+│
+├── app/
+│   └── App.tsx                     # Main application entry point
+│
+├── components/
+│   ├── SplashView.tsx              # Welcome/Splash Screen
+│   ├── LoginView.tsx               # User Login and Role Selection
+│   ├── FamiliarityView.tsx         # Skill Level Assessment
+│   ├── DashboardView.tsx           # Main Dashboard
+│   ├── LessonMapView.tsx           # Lesson Path/Map
+│   ├── PracticeView.tsx            # Practice Drills
+│   ├── AchievementsView.tsx        # Achievement System
+│   ├── ProfileView.tsx             # User Profile
+│   └── LessonActiveView.tsx        # Active Lesson Player
+│
+├── data/
+│   └── lessons.ts                  # Lesson Data and Configuration
+│
+├── assets/
+│   └── images/
+│       └── senya/                  # Senya Mascot Images
+│
+├── types.ts                        # TypeScript Definitions
+│
+└── package.json                    # Dependencies and Scripts
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
+## 🚀 Getting Started
 
-To learn more about developing your project with Expo, look at the following resources:
+### Prerequisites
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Before running the application, ensure that the following are installed:
 
-## Join the community
+* Node.js (v16 or later)
+* npm or yarn
+* Expo CLI
+* Android Studio (Android Emulator)
+* Xcode (iOS Simulator - macOS only)
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Installation
+
+#### 1. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/senas_danah.git
+cd senas_danah
+```
+
+#### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+#### 3. Start the Development Server
+
+```bash
+npx expo start
+```
+
+#### 4. Run the Application
+
+**Using a Physical Device**
+
+* Install the Expo Go application.
+* Scan the generated QR code.
+
+**Using an Emulator**
+
+* Press `a` for Android Emulator.
+* Press `i` for iOS Simulator.
+
+---
+
+## 🎯 Core Functionalities
+
+### 📚 Lesson Path
+
+* Progressive learning modules.
+* Alphabet and number sign lessons.
+* Interactive quizzes and assessments.
+* Guided learning experience.
+
+### ✋ Practice Mode
+
+* Flashcards for FSL signs.
+* Alphabet practice drills.
+* Number sign exercises.
+* Immediate feedback and reinforcement.
+
+### 🏅 Achievement System
+
+* Badge rewards.
+* Learning milestones.
+* Progress indicators.
+
+### 👤 Profile Management
+
+* Personal profile customization.
+* Progress overview.
+* Learning statistics.
+
+---
+
+## 📸 Screenshots
+
+> Add screenshots after deployment or testing.
+
+```text
+screenshots/
+├── splash.png
+├── dashboard.png
+├── lessons.png
+└── practice.png
+```
+
+Example:
+
+```md
+![Splash Screen](screenshots/splash.png)
+
+![Dashboard](screenshots/dashboard.png)
+
+![Lessons](screenshots/lessons.png)
+
+![Practice](screenshots/practice.png)
+```
+
+---
+
+## 📖 Educational Purpose
+
+This project was developed as part of the **App Development Course Requirement**.
+
+The primary objective of SEÑAS is to promote accessibility and awareness of **Filipino Sign Language (FSL)** by providing an engaging and interactive learning platform for students and beginners.
+
+---
+
+## 🤝 Contributing
+
+Contributions, suggestions, and improvements are welcome.
+
+1. Fork the repository.
+2. Create a feature branch.
+
+```bash
+git checkout -b feature/new-feature
+```
+
+3. Commit your changes.
+
+```bash
+git commit -m "Add new feature"
+```
+
+4. Push to your branch.
+
+```bash
+git push origin feature/new-feature
+```
+
+5. Open a Pull Request.
+
+---
+
+## 📝 License
+
+This project is intended for educational purposes.
+
+```text
+MIT License
+```
+
+See the `LICENSE` file for additional information.
+
+---
+
+## 👨‍💻 Author
+
+### Danah Paris
+
+**Project:** SEÑAS - Filipino Sign Language Learning App
+
+**Course:** App Development
+
+---
+
+## 🙏 Acknowledgments
+
+* Filipino Sign Language Community
+* React Native Team
+* Expo Team
+* NativeWind Contributors
+* Faculty Advisers and Project Evaluators
+* All Testers and Contributors
+
+---
+
+<p align="center">
+  Made with ❤️ for Filipino Sign Language Education
+</p>
