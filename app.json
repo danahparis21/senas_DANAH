@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "senas_danah",
-    "slug": "senas_danah",
+    "name": "Senas_APPDEV",
+    "slug": "Senas_APPDEV",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "senasdanah",
+    "scheme": "senasappdev",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -43,6 +43,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "apiUrl": "http://192.168.1.35:8000/api"
     }
   }
 }
