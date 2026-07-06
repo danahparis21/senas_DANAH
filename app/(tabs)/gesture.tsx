@@ -1,412 +1,1093 @@
-import React, { useState } from 'react';
+// app/(tabs)/gesture.tsx
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, Pressable, ScrollView, Modal
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  Pressable,
+  ScrollView,
+  Dimensions,
+  FlatList,
+  TouchableOpacity,
+  Animated,
+  Easing,
+  StatusBar
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import Svg, { Path, Circle, Line, Polyline, Rect } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Rect, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 
-/* ══ DATA ══════════════════════════════════════════════════════════════ */
-const gestureChallenges = [
-  { letter: 'A', emoji: '✊', hint: 'Closed fist — thumb resting on side of index finger', color: '#2563EB' },
-  { letter: 'B', emoji: '🖐',  hint: 'Four fingers pointing up, thumb folded across palm', color: '#10B981' },
-  { letter: 'C', emoji: '🤏', hint: 'Curve all fingers and thumb to form letter C shape', color: '#F59E0B' },
-  { letter: 'D', emoji: '👆', hint: 'Index finger up, other fingers touch thumb', color: '#8B5CF6' },
-  { letter: 'E', emoji: '🤛', hint: 'All fingers bent down toward palm, touching thumb', color: '#EF4444' },
-];
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const CARD_WIDTH = screenWidth * 0.76;
+const CARD_MARGIN = 10;
+const SNAP_INTERVAL = CARD_WIDTH + CARD_MARGIN * 2;
+const SIDE_OFFSET = (screenWidth - CARD_WIDTH - CARD_MARGIN * 2) / 2;
 
-/* ══ Result Modal ══════════════════════════════════════════════════════ */
-function ResultModal({ visible, score, total, onClose, onRetry }: {
-  visible: boolean; score: number; total: number; onClose: () => void; onRetry: () => void;
-}) {
-  const pct = Math.round((score / total) * 100);
-  const { label, color } =
-    pct === 100 ? { label: 'Perfect! 🎉', color: '#F59E0B' } :
-    pct >= 80   ? { label: 'Excellent! 🌟', color: '#10B981' } :
-    pct >= 60   ? { label: 'Good Job! 👍', color: '#2563EB' } :
-                  { label: 'Keep Trying! 💪', color: '#8B5CF6' };
+// ── GRADIENT COLORS ──────────────────────────────────────────────────
+const GRADIENT = {
+  start: '#87CEEB',
+  mid: '#B3E5FC',
+  mid2: '#E3F2FD',
+  end: '#F5F9FF',
+};
 
+// ── ANIMATED CLOUD ───────────────────────────────────────────────────
+function AnimatedCloud({ scale = 1, opacity = 0.4 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <View style={s.resultModal}>
-          <Image source={require('../../assets/images/img/senya_teaching.png')} style={s.resultModalSenya} contentFit="contain" />
-          <Text style={{ fontSize: 40, marginBottom: 8 }}>🏆</Text>
-          <Text style={[s.resultModalLabel, { color }]}>{label}</Text>
-          <Text style={s.resultModalScore}>{score}<Text style={{ fontSize: 24, opacity: 0.5 }}>/{total}</Text></Text>
-          <Text style={s.resultModalSub}>signs recognized</Text>
-          <View style={s.xpBadgeLg}><Text style={s.xpBadgeLgText}>+{score * 15} XP Earned!</Text></View>
-
-          <View style={s.resultModalBtns}>
-            <Pressable style={s.retryBtn} onPress={onRetry}>
-              <Text style={s.retryBtnText}>↺ Try Again</Text>
-            </Pressable>
-            <Pressable style={s.doneBtn} onPress={onClose}>
-              <Text style={s.doneBtnText}>Done ✓</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
+    <Svg width={120 * scale} height={60 * scale} viewBox="0 0 120 60" opacity={opacity}>
+      <Defs>
+        <LinearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
+          <Stop offset="100%" stopColor="#E0F2FE" stopOpacity="0.5" />
+        </LinearGradient>
+      </Defs>
+      <Path
+        d="M20 40 C10 40 5 30 12 22 C8 12 20 5 30 10 C38 2 52 2 60 8 C68 3 80 5 85 14 C95 12 105 18 100 28 C110 35 108 48 95 50 L25 50 C18 50 14 45 20 40Z"
+        fill="url(#cloudGrad)"
+      />
+    </Svg>
   );
 }
 
-/* ══ Camera Placeholder ══════════════════════════════════════════════════ */
-function CameraViewPlaceholder({ challenge, status, onDetect }: {
-  challenge: typeof gestureChallenges[0];
-  status: 'waiting' | 'scanning' | 'success' | 'fail';
-  onDetect: (success: boolean) => void;
+// Module data with new colors
+const modules = [
+  {
+    id: 'alphabet1',
+    title: 'Alphabet Part 1',
+    subtitle: 'A-M',
+    category: 'alphabet',
+    color: ['#FF6B6B', '#FF8E8E'],
+    gradientColors: ['#FF6B6B', '#FF8E8E'],
+    icon: 'book',
+    description: 'Learn letters A through M',
+    progress: 60,
+    xp: 100,
+    locked: false,
+    route: '/gesture/webview-camera',
+    image: require('../../assets/images/img/alphabet.png'),
+    lessons: 13,
+  },
+  {
+    id: 'alphabet2',
+    title: 'Alphabet Part 2',
+    subtitle: 'N-Z',
+    category: 'alphabet',
+    color: ['#4ECDC4', '#45B7AA'],
+    gradientColors: ['#4ECDC4', '#45B7AA'],
+    icon: 'ribbon',
+    description: 'Learn letters N through Z',
+    progress: 0,
+    xp: 120,
+    locked: false,
+    route: '/gesture/alphabet2',
+    image: require('../../assets/images/img/alphabet_star.png'),
+    lessons: 13,
+  },
+  {
+    id: 'fingerspelling',
+    title: 'Fingerspelling',
+    subtitle: 'Practice spelling words',
+    category: 'practice',
+    color: ['#A8E6CF', '#88D8B0'],
+    gradientColors: ['#A8E6CF', '#88D8B0'],
+    icon: 'hand-left',
+    description: 'Spell words using signs',
+    progress: 0,
+    xp: 150,
+    locked: true,
+    route: '/gesture/fingerspelling',
+    image: require('../../assets/images/img/senya_magnify.png'),
+    lessons: 10,
+  },
+  {
+    id: 'greetings',
+    title: 'Basic Greetings',
+    subtitle: 'Everyday Signs & Phrases',
+    category: 'greetings',
+    color: ['#FFB6C1', '#FF8E9E'],
+    gradientColors: ['#FFB6C1', '#FF8E9E'],
+    icon: 'chatbubble-ellipses',
+    description: 'Learn greetings and phrases',
+    progress: 0,
+    xp: 200,
+    locked: true,
+    route: '/gesture/greetings',
+    image: require('../../assets/images/img/greetings.png'),
+    lessons: 8,
+  },
+];
+
+// Categories configuration
+const CATEGORIES = [
+  { id: 'all', title: 'All', icon: 'grid-outline' },
+  { id: 'alphabet', title: 'Alphabet', icon: 'text-outline' },
+  { id: 'practice', title: 'Practice', icon: 'hand-left-outline' },
+  { id: 'greetings', title: 'Greetings', icon: 'chatbubbles-outline' },
+];
+
+// Individual module card component
+function ModuleCard({
+  module,
+  onPress,
+  isActive,
+}: {
+  module: typeof modules[0];
+  onPress: () => void;
+  isActive: boolean;
 }) {
+  const scale = useRef(new Animated.Value(0.92)).current;
+  const opacity = useRef(new Animated.Value(0.7)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, {
+        toValue: isActive ? 1.0 : 0.92,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 40,
+      }),
+      Animated.timing(opacity, {
+        toValue: isActive ? 1.0 : 0.7,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isActive]);
+
   return (
-    <View style={[s.cameraBox, { borderColor: status === 'success' ? '#10B981' : status === 'fail' ? '#EF4444' : challenge.color }]}>
-      {/* Simulated camera feed background */}
-      <View style={s.cameraFeed}>
-        <View style={s.cameraBg} />
+    <Animated.View
+      style={[
+        styles.cardContainer,
+        {
+          transform: [{ scale }],
+          opacity,
+        },
+      ]}
+    >
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.9}
+        style={styles.cardTouchable}
+      >
+        <View style={[styles.cardGradient, { backgroundColor: module.color[0] }]}>
+          {/* Main Visual Image container */}
+          <View style={styles.cardImageContainer}>
+            <Image
+              source={module.image}
+              style={styles.cardImage}
+              contentFit="cover"
+            />
+            {/* Top info badge floating over the image */}
+            <View style={styles.cardFloatingHeader}>
+              <View style={[styles.cardIconBadge, { backgroundColor: module.color[0] + '60' }]}>
+                <Ionicons name={module.icon as any} size={20} color="#FFF" />
+              </View>
+              {module.progress > 0 && (
+                <View style={styles.cardProgressBadge}>
+                  <Text style={styles.cardProgressBadgeText}>{module.progress}% Done</Text>
+                </View>
+              )}
+            </View>
+          </View>
 
-        {/* Corner brackets */}
-        {[
-          { top: 12, left: 12, borderTopWidth: 3, borderLeftWidth: 3 },
-          { top: 12, right: 12, borderTopWidth: 3, borderRightWidth: 3 },
-          { bottom: 12, left: 12, borderBottomWidth: 3, borderLeftWidth: 3 },
-          { bottom: 12, right: 12, borderBottomWidth: 3, borderRightWidth: 3 },
-        ].map((style, i) => (
-          <View key={i} style={[s.cornerBracket, style, { borderColor: challenge.color }]} />
-        ))}
+          {/* Overlapping details card at the bottom */}
+          <View style={styles.cardOverlayDetails}>
+            <View style={styles.cardHeaderInfo}>
+              <Ionicons name="book-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
+              <Text style={styles.cardInfoText}>{module.lessons} Lessons</Text>
+              <Text style={styles.cardInfoDivider}>•</Text>
+              <Ionicons name="star" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
+              <Text style={styles.cardInfoText}>{module.xp} XP</Text>
+            </View>
 
-        {/* Sign display area */}
-        <View style={s.cameraCenter}>
-          {status === 'success' ? (
-            <View style={s.successOverlay}>
-              <Text style={s.successEmoji}>✅</Text>
-              <Text style={s.successText}>Sign Detected!</Text>
+            <Text style={styles.cardMainTitle} numberOfLines={1}>{module.title}</Text>
+            <Text style={styles.cardDescription} numberOfLines={1}>{module.description}</Text>
+
+            {/* Bottom row: progress track or play button */}
+            <View style={styles.cardFooterRow}>
+              {module.locked ? (
+                <View style={styles.lockedRow}>
+                  <Ionicons name="lock-closed" size={16} color="#EF4444" style={{ marginRight: 4 }} />
+                  <Text style={styles.lockedText}>Locked</Text>
+                </View>
+              ) : (
+                <View style={styles.progressBarWrapper}>
+                  <View style={styles.progressBarTrack}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${module.progress}%`, backgroundColor: module.color[0] }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.progressPctText}>{module.progress}% Complete</Text>
+                </View>
+              )}
+
+              {!module.locked && (
+                <View style={[styles.playIndicatorButton, { backgroundColor: module.color[0] }]}>
+                  <Ionicons name="play" size={14} color="#FFF" />
+                </View>
+              )}
             </View>
-          ) : status === 'fail' ? (
-            <View style={s.failOverlay}>
-              <Text style={s.failEmoji}>❌</Text>
-              <Text style={s.failText}>Try Again</Text>
-            </View>
-          ) : status === 'scanning' ? (
-            <View style={s.scanningOverlay}>
-              <Text style={s.scanningEmoji}>🔍</Text>
-              <Text style={s.scanningText}>Scanning...</Text>
-            </View>
-          ) : (
-            <View style={s.waitingOverlay}>
-              <Text style={s.handEmoji}>{challenge.emoji}</Text>
-              <Text style={s.waitingText}>Show sign for "{challenge.letter}"</Text>
+          </View>
+
+          {/* Lock Overlay if locked */}
+          {module.locked && (
+            <View style={styles.lockedCardOverlay}>
+              <View style={styles.lockedIconCircle}>
+                <Ionicons name="lock-closed" size={26} color="#0F3172" />
+              </View>
+              <Text style={styles.lockedOverlayText}>Complete previous modules to unlock!</Text>
             </View>
           )}
         </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
-        {/* Hand skeleton dots simulation */}
-        <View style={s.handSkeleton}>
-          {[...Array(8)].map((_, i) => (
-            <View key={i} style={[s.skelDot, {
-              left: 40 + (i % 4) * 30,
-              top: 20 + Math.floor(i / 4) * 40,
-              opacity: status === 'scanning' ? 0.8 : 0.3,
-              backgroundColor: challenge.color,
-            }]} />
-          ))}
-        </View>
-      </View>
-
-      {/* Scan line animation hint */}
-      {status === 'scanning' && (
-        <View style={[s.scanLine, { backgroundColor: challenge.color }]} />
-      )}
+// Carousel dots
+function CarouselDots({ currentIndex, total }: { currentIndex: number; total: number }) {
+  return (
+    <View style={styles.dotsContainer}>
+      {Array.from({ length: total }).map((_, index) => (
+        <View
+          key={index}
+          style={[
+            styles.dot,
+            currentIndex === index && styles.dotActive,
+          ]}
+        />
+      ))}
     </View>
   );
 }
 
-/* ══ MAIN SCREEN ══════════════════════════════════════════════════════════ */
-export default function Gesture() {
+export default function GestureMain() {
   const router = useRouter();
-  const [challengeIdx, setChallengeIdx] = useState(0);
-  const [status, setStatus] = useState<'waiting' | 'scanning' | 'success' | 'fail'>('waiting');
-  const [score, setScore] = useState(0);
-  const [completedIds, setCompletedIds] = useState<Set<number>>(new Set());
-  const [showResult, setShowResult] = useState(false);
-  const [camPermission, setCamPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
 
-  const challenge = gestureChallenges[challengeIdx];
+  // ── Cloud Animations ──
+  const cloud1Anim = useRef(new Animated.Value(-200)).current;
+  const cloud2Anim = useRef(new Animated.Value(screenWidth + 200)).current;
+  const cloud3Anim = useRef(new Animated.Value(-250)).current;
+  const cloud4Anim = useRef(new Animated.Value(screenWidth + 250)).current;
 
-  const handleSimulateDetect = (success: boolean) => {
-    setStatus(success ? 'success' : 'fail');
-    if (success) {
-      setScore(s => s + 1);
-      setCompletedIds(prev => new Set([...prev, challengeIdx]));
+  // ── Sun Glow Animation ──
+  const sunAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Cloud Loops ──
+  useEffect(() => {
+    const startCloud1 = () => {
+      cloud1Anim.setValue(-200);
+      Animated.timing(cloud1Anim, {
+        toValue: screenWidth + 200,
+        duration: 45000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start(() => startCloud1());
+    };
+
+    const startCloud2 = () => {
+      cloud2Anim.setValue(screenWidth + 200);
+      Animated.timing(cloud2Anim, {
+        toValue: -200,
+        duration: 55000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start(() => startCloud2());
+    };
+
+    const startCloud3 = () => {
+      cloud3Anim.setValue(-250);
+      Animated.timing(cloud3Anim, {
+        toValue: screenWidth + 250,
+        duration: 50000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start(() => startCloud3());
+    };
+
+    const startCloud4 = () => {
+      cloud4Anim.setValue(screenWidth + 250);
+      Animated.timing(cloud4Anim, {
+        toValue: -250,
+        duration: 60000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start(() => startCloud4());
+    };
+
+    startCloud1();
+    startCloud2();
+    startCloud3();
+    startCloud4();
+
+    // ── Sun Glow Loop ──
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(sunAnim, {
+          toValue: 1,
+          duration: 3000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(sunAnim, {
+          toValue: 0,
+          duration: 3000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    return () => {
+      // Cleanup not needed for looping animations
+    };
+  }, []);
+
+  const handleModulePress = (module: typeof modules[0]) => {
+    if (module.locked) {
+      return;
     }
-    setTimeout(() => {
-      if (challengeIdx < gestureChallenges.length - 1) {
-        setChallengeIdx(challengeIdx + 1);
-        setStatus('waiting');
-      } else {
-        setShowResult(true);
-        setStatus('waiting');
-      }
-    }, 1200);
+    router.push(module.route as any);
   };
 
-  const handleScan = () => {
-    if (status !== 'waiting') return;
-    setStatus('scanning');
-    // Simulate recognition after 2 seconds (random result for demo)
-    setTimeout(() => {
-      handleSimulateDetect(Math.random() > 0.3); // 70% success rate for demo
-    }, 2000);
+  const handleScroll = (event: any) => {
+    const index = Math.round(event.nativeEvent.contentOffset.x / SNAP_INTERVAL);
+    setCurrentIndex(index);
   };
 
-  const handleRetry = () => {
-    setChallengeIdx(0);
-    setScore(0);
-    setCompletedIds(new Set());
-    setStatus('waiting');
-    setShowResult(false);
+  const scrollToIndex = (index: number) => {
+    flatListRef.current?.scrollToIndex({
+      index,
+      animated: true,
+    });
   };
 
-  const handlePermission = () => {
-    setCamPermission('granted');
-  };
+  // Filter modules based on category
+  const filteredModules = selectedCategory === 'all'
+    ? modules
+    : modules.filter((m) => m.category === selectedCategory);
+
+  // ── Sun Glow Interpolation ──
+  const sunGlow = sunAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.8],
+  });
 
   return (
-    <SafeAreaView style={s.container}>
-      <ResultModal
-        visible={showResult}
-        score={score}
-        total={gestureChallenges.length}
-        onClose={() => router.push('/(tabs)/dashboard')}
-        onRetry={handleRetry}
-      />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-        {/* Top bar */}
-        <View style={s.topBar}>
-          <View>
-            <Text style={s.logoText}>SEÑAS</Text>
-            <Text style={s.subTitle}>Gesture Recognition</Text>
-          </View>
-          <View style={s.topRight}>
-            <View style={s.scoreBadge}>
-              <Text style={s.scoreBadgeText}>✋ {score}/{gestureChallenges.length}</Text>
-            </View>
-            <Pressable onPress={() => router.back()} style={s.backBtnTop}>
-              <Text style={s.backBtnTopText}>←</Text>
-            </Pressable>
-          </View>
-        </View>
+      {/* ── Gradient Background ── */}
+      <View style={StyleSheet.absoluteFillObject}>
+        <Svg width={screenWidth} height={screenHeight}>
+          <Defs>
+            <LinearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor={GRADIENT.start} stopOpacity="1" />
+              <Stop offset="30%" stopColor={GRADIENT.mid} stopOpacity="0.9" />
+              <Stop offset="70%" stopColor={GRADIENT.mid2} stopOpacity="0.8" />
+              <Stop offset="100%" stopColor={GRADIENT.end} stopOpacity="0.9" />
+            </LinearGradient>
+          </Defs>
+          <Rect width={screenWidth} height={screenHeight} fill="url(#bgGrad)" />
+        </Svg>
+      </View>
 
-        {/* Challenge progress strip */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.challengeStrip}>
-          {gestureChallenges.map((g, i) => (
-            <Pressable
+      {/* ── Sun with Glow ── */}
+      <Animated.View style={[styles.sunContainer, { opacity: sunGlow }]}>
+        <Svg width="120" height="120" viewBox="0 0 120 120">
+          <Circle cx="60" cy="60" r="45" fill="#FCD34D" opacity="0.9" />
+          <Circle cx="60" cy="60" r="55" fill="#FCD34D" opacity="0.3" />
+          <Circle cx="60" cy="60" r="70" fill="#FCD34D" opacity="0.1" />
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => (
+            <Rect
               key={i}
-              style={[s.challengeChip,
-                i === challengeIdx && s.challengeChipActive,
-                completedIds.has(i) && s.challengeChipDone,
-              ]}
-              onPress={() => { if (!status.includes('scanning')) { setChallengeIdx(i); setStatus('waiting'); } }}
-            >
-              <Text style={s.challengeChipEmoji}>{g.emoji}</Text>
-              <Text style={[s.challengeChipLetter,
-                i === challengeIdx ? { color: '#fff' } :
-                completedIds.has(i) ? { color: '#10B981' } : { color: '#4b7bbb' }
-              ]}>{g.letter}</Text>
-            </Pressable>
+              x="54"
+              y="5"
+              width="12"
+              height="20"
+              rx="6"
+              fill="#FCD34D"
+              opacity="0.6"
+              transform={`rotate(${angle}, 60, 60)`}
+            />
           ))}
-        </ScrollView>
+        </Svg>
+      </Animated.View>
 
-        {/* Current challenge info */}
-        <View style={s.challengeInfoCard}>
-          <View style={[s.challengeColorBar, { backgroundColor: challenge.color }]} />
-          <View style={s.challengeInfoInner}>
-            <View style={s.challengeInfoLeft}>
-              <Text style={s.challengeTitle}>Sign the letter</Text>
-              <Text style={[s.challengeLetter, { color: challenge.color }]}>{challenge.letter}</Text>
-              <Text style={s.challengeHint}>{challenge.hint}</Text>
+      {/* ── Floating Clouds ── */}
+      <View style={styles.floatingSky} pointerEvents="none">
+        <Animated.View style={[styles.cloudWrapper, { top: 40, transform: [{ translateX: cloud1Anim }] }]}>
+          <AnimatedCloud scale={1.5} opacity={0.4} />
+        </Animated.View>
+        <Animated.View style={[styles.cloudWrapper, { top: 180, transform: [{ translateX: cloud2Anim }] }]}>
+          <AnimatedCloud scale={1.2} opacity={0.3} />
+        </Animated.View>
+        <Animated.View style={[styles.cloudWrapper, { top: 350, transform: [{ translateX: cloud3Anim }] }]}>
+          <AnimatedCloud scale={1.8} opacity={0.35} />
+        </Animated.View>
+        <Animated.View style={[styles.cloudWrapper, { top: 500, transform: [{ translateX: cloud4Anim }] }]}>
+          <AnimatedCloud scale={1.3} opacity={0.3} />
+        </Animated.View>
+      </View>
+
+      <View style={styles.content}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.greeting}>Let's Practice</Text>
+              <Text style={styles.title}>Gestures</Text>
             </View>
-            <View style={[s.challengeEmojiBig, { backgroundColor: challenge.color + '15' }]}>
-              <Text style={s.challengeEmojiBigText}>{challenge.emoji}</Text>
+            <View style={styles.headerRight}>
+              <View style={styles.xpBadge}>
+                <Ionicons name="star" size={16} color="#F59E0B" style={{ marginRight: 4 }} />
+                <Text style={styles.xpBadgeText}>150 XP</Text>
+              </View>
+              <TouchableOpacity style={styles.settingsButton}>
+                <Ionicons name="options-outline" size={22} color="#0F3172" />
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
 
-        {/* Camera permission prompt or camera view */}
-        {camPermission !== 'granted' ? (
-          <View style={s.permissionCard}>
-            <Image
-              source={require('../../assets/images/img/camera.png')}
-              style={s.cameraIconImg} contentFit="contain"
-            />
-            <Text style={s.permissionTitle}>Camera Access Needed</Text>
-            <Text style={s.permissionDesc}>
-              To recognize your hand signs, SEÑAS needs access to your camera.{'\n'}
-              Your video is processed on-device and never stored.
-            </Text>
-            <Pressable style={s.allowBtn} onPress={handlePermission}>
-              <Text style={s.allowBtnText}>📷 Allow Camera Access</Text>
-            </Pressable>
-            <Pressable style={s.demoModeBtn} onPress={handlePermission}>
-              <Text style={s.demoModeBtnText}>Try Demo Mode Instead</Text>
-            </Pressable>
+          {/* Category Filters */}
+          <View style={styles.categoriesContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesContent}
+            >
+              {CATEGORIES.map((cat) => {
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryButton,
+                      isSelected && styles.categoryButtonActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedCategory(cat.id);
+                      setCurrentIndex(0);
+                    }}
+                  >
+                    <Ionicons
+                      name={cat.icon as any}
+                      size={18}
+                      color={isSelected ? '#FFFFFF' : '#4B7BBB'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        isSelected && styles.categoryTextActive,
+                      ]}
+                    >
+                      {cat.title}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
-        ) : (
-          <>
-            {/* Camera view */}
-            <CameraViewPlaceholder
-              challenge={challenge}
-              status={status}
-              onDetect={handleSimulateDetect}
-            />
 
-            {/* Scan button */}
-            <View style={s.scanBtnRow}>
-              <Pressable
-                style={[s.scanBtn, status === 'scanning' && s.scanBtnActive, { borderColor: challenge.color }]}
-                onPress={handleScan}
-                disabled={status === 'scanning' || status === 'success'}
-              >
-                <View style={[s.scanBtnInner, { backgroundColor: challenge.color }]}>
-                  <Text style={s.scanBtnText}>
-                    {status === 'scanning' ? '🔍 Scanning...' :
-                     status === 'success'  ? '✅ Got it!'     :
-                     status === 'fail'     ? '↺ Try Again'   : '📷 Scan Sign'}
-                  </Text>
+          {/* Carousel Section */}
+          <View style={styles.carouselSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Featured Modules</Text>
+              {filteredModules.length > 1 && (
+                <View style={styles.carouselNavSimple}>
+                  <TouchableOpacity
+                    style={[styles.arrowButton, currentIndex === 0 && styles.arrowButtonDisabled]}
+                    onPress={() => scrollToIndex(Math.max(0, currentIndex - 1))}
+                    disabled={currentIndex === 0}
+                  >
+                    <Ionicons
+                      name="chevron-back"
+                      size={20}
+                      color={currentIndex === 0 ? 'rgba(15, 49, 114, 0.25)' : '#0F3172'}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.arrowButton,
+                      currentIndex === filteredModules.length - 1 && styles.arrowButtonDisabled,
+                    ]}
+                    onPress={() => scrollToIndex(Math.min(filteredModules.length - 1, currentIndex + 1))}
+                    disabled={currentIndex === filteredModules.length - 1}
+                  >
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={currentIndex === filteredModules.length - 1 ? 'rgba(15, 49, 114, 0.25)' : '#0F3172'}
+                    />
+                  </TouchableOpacity>
                 </View>
-              </Pressable>
+              )}
             </View>
 
-            {/* Tips */}
-            <View style={s.tipsCard}>
-              <Image source={require('../../assets/images/img/senya_blue.png')} style={s.tipsSenya} contentFit="contain" />
-              <View style={s.tipsBubble}>
-                <Text style={s.tipsBubbleText}>
-                  💡 Hold your hand steady in good lighting. Keep your hand within the frame and face the camera.
-                </Text>
+            {filteredModules.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="search-outline" size={40} color="#4B7BBB" style={{ marginBottom: 12 }} />
+                <Text style={styles.emptyText}>No modules in this category yet!</Text>
               </View>
-            </View>
+            ) : (
+              <View style={styles.carouselContainer}>
+                <FlatList
+                  ref={flatListRef}
+                  data={filteredModules}
+                  renderItem={({ item, index }) => (
+                    <ModuleCard
+                      module={item}
+                      onPress={() => handleModulePress(item)}
+                      isActive={currentIndex === index}
+                    />
+                  )}
+                  keyExtractor={(item) => item.id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  onScroll={handleScroll}
+                  scrollEventThrottle={16}
+                  snapToInterval={SNAP_INTERVAL}
+                  snapToAlignment="center"
+                  decelerationRate="fast"
+                  contentContainerStyle={{ paddingHorizontal: SIDE_OFFSET }}
+                  style={styles.carousel}
+                />
 
-            {/* All signs reference */}
-            <View style={s.referenceCard}>
-              <Text style={s.referenceTitle}>Quick Reference</Text>
-              <View style={s.referenceGrid}>
-                {gestureChallenges.map((g, i) => (
-                  <View key={i} style={[s.referenceItem, completedIds.has(i) && s.referenceItemDone]}>
-                    <Text style={s.referenceEmoji}>{g.emoji}</Text>
-                    <Text style={[s.referenceLetter, completedIds.has(i) ? { color: '#10B981' } : { color: '#0f3172' }]}>{g.letter}</Text>
-                    {completedIds.has(i) && <Text style={s.referenceDoneCheck}>✓</Text>}
-                  </View>
-                ))}
+                <CarouselDots currentIndex={currentIndex} total={filteredModules.length} />
               </View>
+            )}
+          </View>
+
+          {/* Quick Access */}
+          <View style={styles.quickAccess}>
+            <Text style={styles.sectionTitle}>Quick Start</Text>
+            <View style={styles.quickAccessGrid}>
+              <TouchableOpacity
+                style={[styles.quickAccessItem, styles.quickAccessItemStudent]}
+                onPress={() => router.push('/gesture/webview-camera')}
+              >
+                <View style={[styles.quickAccessIconContainer, { backgroundColor: 'rgba(46, 127, 232, 0.12)' }]}>
+                  <Ionicons name="text-outline" size={24} color="#2E7FE8" />
+                </View>
+                <Text style={styles.quickAccessText}>Alphabet</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickAccessItem, styles.quickAccessItemLocked]}
+                disabled
+              >
+                <View style={[styles.quickAccessIconContainer, { backgroundColor: 'rgba(156, 163, 175, 0.1)' }]}>
+                  <Ionicons name="hand-left-outline" size={24} color="#9CA3AF" />
+                </View>
+                <Text style={styles.quickAccessText}>Fingerspell</Text>
+                <Ionicons name="lock-closed" size={12} color="#9CA3AF" style={styles.quickAccessLock} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickAccessItem, styles.quickAccessItemLocked]}
+                disabled
+              >
+                <View style={[styles.quickAccessIconContainer, { backgroundColor: 'rgba(156, 163, 175, 0.1)' }]}>
+                  <Ionicons name="chatbubbles-outline" size={24} color="#9CA3AF" />
+                </View>
+                <Text style={styles.quickAccessText}>Greetings</Text>
+                <Ionicons name="lock-closed" size={12} color="#9CA3AF" style={styles.quickAccessLock} />
+              </TouchableOpacity>
             </View>
-          </>
-        )}
-      </ScrollView>
+          </View>
+
+          {/* Senya's Tip */}
+          <View style={styles.tipCard}>
+            <Image
+              source={require('../../assets/images/new_characters/senya.png')}
+              style={styles.tipImage}
+              contentFit="contain"
+            />
+            <View style={styles.tipContent}>
+              <Text style={styles.tipTitle}>💡 Senya Says</Text>
+              <Text style={styles.tipText}>
+                Complete Alphabet Part 1 to unlock more modules! Practice makes perfect! 🌟
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
-/* ══ STYLES ══════════════════════════════════════════════════════════════ */
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#eaf5fd' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  scroll: { padding: 16, paddingBottom: 60 },
-
-  // Top bar
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  logoText: { color: '#0f3172', fontSize: 22, fontWeight: '800', letterSpacing: 2 },
-  subTitle: { color: '#4b7bbb', fontSize: 12, fontWeight: '600', marginTop: 2 },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  scoreBadge: { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)' },
-  scoreBadgeText: { fontSize: 13, fontWeight: '700', color: '#0f3172' },
-  backBtnTop: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)' },
-  backBtnTopText: { fontSize: 18, color: '#0f3172' },
-
-  // Challenge strip
-  challengeStrip: { gap: 8, paddingRight: 4, marginBottom: 14 },
-  challengeChip: { alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', gap: 4 },
-  challengeChipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-  challengeChipDone: { borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)' },
-  challengeChipEmoji: { fontSize: 20 },
-  challengeChipLetter: { fontSize: 11, fontWeight: '800' },
-
-  // Challenge info card
-  challengeInfoCard: { backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', borderRadius: 20, marginBottom: 14, overflow: 'hidden', shadowColor: '#0f3172', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.09, shadowRadius: 12, elevation: 4 },
-  challengeColorBar: { height: 4 },
-  challengeInfoInner: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 16 },
-  challengeInfoLeft: { flex: 1 },
-  challengeTitle: { fontSize: 12, fontWeight: '600', color: '#4b7bbb', marginBottom: 2 },
-  challengeLetter: { fontSize: 40, fontWeight: '900', marginBottom: 4 },
-  challengeHint: { fontSize: 12, color: '#6B7280', fontWeight: '500', lineHeight: 18 },
-  challengeEmojiBig: { width: 70, height: 70, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  challengeEmojiBigText: { fontSize: 40 },
-
-  // Camera
-  cameraBox: { borderRadius: 24, borderWidth: 2, overflow: 'hidden', marginBottom: 14, height: 280, position: 'relative' },
-  cameraFeed: { flex: 1, backgroundColor: '#0a1628', position: 'relative' },
-  cameraBg: { position: 'absolute', inset: 0, backgroundColor: '#0a1628' },
-  cornerBracket: { position: 'absolute', width: 24, height: 24 },
-  cameraCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  waitingOverlay: { alignItems: 'center', gap: 8 },
-  handEmoji: { fontSize: 72, opacity: 0.8 },
-  waitingText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
-  scanningOverlay: { alignItems: 'center', gap: 8 },
-  scanningEmoji: { fontSize: 48 },
-  scanningText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  successOverlay: { alignItems: 'center', gap: 8, backgroundColor: 'rgba(16,185,129,0.15)', borderRadius: 20, padding: 20 },
-  successEmoji: { fontSize: 56 },
-  successText: { color: '#10B981', fontSize: 16, fontWeight: '800' },
-  failOverlay: { alignItems: 'center', gap: 8, backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 20, padding: 20 },
-  failEmoji: { fontSize: 56 },
-  failText: { color: '#EF4444', fontSize: 16, fontWeight: '700' },
-  handSkeleton: { position: 'absolute', bottom: 20, right: 20, width: 130, height: 80 },
-  skelDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4 },
-  scanLine: { position: 'absolute', left: 0, right: 0, height: 2, top: '50%', opacity: 0.5 },
-
-  // Scan button
-  scanBtnRow: { alignItems: 'center', marginBottom: 14 },
-  scanBtn: { borderWidth: 2, borderRadius: 99, padding: 4, width: '80%' },
-  scanBtnActive: { opacity: 0.7 },
-  scanBtnInner: { borderRadius: 99, paddingVertical: 16, alignItems: 'center' },
-  scanBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-
-  // Tips
-  tipsCard: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 14 },
-  tipsSenya: { width: 56, height: 56, flexShrink: 0 },
-  tipsBubble: { flex: 1, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', borderRadius: 14, padding: 12 },
-  tipsBubbleText: { fontSize: 12, color: '#0f3172', fontWeight: '500', lineHeight: 18 },
-
-  // Reference
-  referenceCard: { backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', borderRadius: 20, padding: 18 },
-  referenceTitle: { fontSize: 14, fontWeight: '800', color: '#0f3172', marginBottom: 14 },
-  referenceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  referenceItem: { width: '18%', alignItems: 'center', padding: 8, borderRadius: 12, backgroundColor: 'rgba(15,49,114,0.05)' },
-  referenceItemDone: { backgroundColor: 'rgba(16,185,129,0.10)' },
-  referenceEmoji: { fontSize: 24 },
-  referenceLetter: { fontSize: 11, fontWeight: '800', marginTop: 2 },
-  referenceDoneCheck: { fontSize: 10, color: '#10B981', fontWeight: '800' },
-
-  // Permission
-  permissionCard: { backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', borderRadius: 24, padding: 28, alignItems: 'center', marginBottom: 14 },
-  cameraIconImg: { width: 80, height: 80, marginBottom: 16 },
-  permissionTitle: { fontSize: 20, fontWeight: '800', color: '#0f3172', marginBottom: 8 },
-  permissionDesc: { fontSize: 13, color: '#6B7280', fontWeight: '500', lineHeight: 20, textAlign: 'center', marginBottom: 24 },
-  allowBtn: { width: '100%', backgroundColor: '#2563EB', borderRadius: 60, paddingVertical: 14, alignItems: 'center', marginBottom: 12, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.28, shadowRadius: 18, elevation: 10 },
-  allowBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  demoModeBtn: { paddingVertical: 10 },
-  demoModeBtnText: { fontSize: 13, fontWeight: '600', color: '#4b7bbb' },
-
-  // Result modal
-  resultModal: { width: '92%', maxWidth: 380, backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: 32, padding: 28, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.2, shadowRadius: 40, elevation: 24 },
-  resultModalSenya: { width: 90, height: 90, marginBottom: 8 },
-  resultModalLabel: { fontSize: 22, fontWeight: '800', marginBottom: 4 },
-  resultModalScore: { fontSize: 64, fontWeight: '900', color: '#0f3172', lineHeight: 72 },
-  resultModalSub: { fontSize: 14, color: '#6B7280', fontWeight: '500', marginBottom: 12 },
-  xpBadgeLg: { backgroundColor: 'rgba(245,158,11,0.15)', borderRadius: 99, paddingVertical: 6, paddingHorizontal: 18, marginBottom: 24 },
-  xpBadgeLgText: { fontSize: 14, fontWeight: '800', color: '#92400E' },
-  resultModalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
-  retryBtn: { flex: 1, paddingVertical: 14, borderRadius: 60, backgroundColor: 'rgba(15,49,114,0.07)', borderWidth: 1, borderColor: 'rgba(15,49,114,0.10)', alignItems: 'center' },
-  retryBtnText: { fontSize: 14, fontWeight: '700', color: '#0f3172' },
-  doneBtn: { flex: 1.5, paddingVertical: 14, borderRadius: 60, backgroundColor: '#2563EB', alignItems: 'center', shadowColor: '#2563EB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 8 },
-  doneBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  sunContainer: {
+    position: 'absolute',
+    top: 40,
+    right: -20,
+    zIndex: 0,
+  },
+  floatingSky: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+    overflow: 'hidden',
+  },
+  cloudWrapper: {
+    position: 'absolute',
+    left: 0,
+  },
+  content: {
+    flex: 1,
+    zIndex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  greeting: {
+    fontSize: 14,
+    color: '#4A5C6E',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1A2C3E',
+    marginTop: 2,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  xpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  xpBadgeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1A2C3E',
+  },
+  settingsButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoriesContainer: {
+    marginVertical: 12,
+  },
+  categoriesContent: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  categoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  categoryButtonActive: {
+    backgroundColor: '#2E7FE8',
+    borderColor: '#2E7FE8',
+    shadowColor: '#2E7FE8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4A5C6E',
+  },
+  categoryTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  carouselSection: {
+    marginVertical: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1A2C3E',
+  },
+  carouselNavSimple: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  arrowButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  arrowButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    marginHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  emptyText: {
+    color: '#4A5C6E',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  carouselContainer: {
+    position: 'relative',
+  },
+  carousel: {
+    height: 360,
+  },
+  cardContainer: {
+    width: CARD_WIDTH,
+    height: 340,
+    marginHorizontal: CARD_MARGIN,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  cardTouchable: {
+    flex: 1,
+  },
+  cardGradient: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cardImageContainer: {
+    height: 180,
+    position: 'relative',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardFloatingHeader: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  cardProgressBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardProgressBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  cardOverlayDetails: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  cardHeaderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  cardInfoText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  cardInfoDivider: {
+    marginHorizontal: 6,
+    color: '#D1D5DB',
+  },
+  cardMainTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1A2C3E',
+    marginBottom: 2,
+  },
+  cardDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  cardFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressBarWrapper: {
+    flex: 1,
+    marginRight: 10,
+  },
+  progressBarTrack: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressPctText: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  playIndicatorButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  lockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  lockedText: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  lockedCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  lockedIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(15, 49, 114, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 49, 114, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  lockedOverlayText: {
+    color: '#4A5C6E',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(26, 44, 62, 0.2)',
+  },
+  dotActive: {
+    backgroundColor: '#2E7FE8',
+    width: 18,
+  },
+  quickAccess: {
+    marginTop: 12,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  quickAccessGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  quickAccessItem: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    paddingVertical: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  quickAccessItemStudent: {
+    borderColor: 'rgba(46, 127, 232, 0.2)',
+  },
+  quickAccessItemLocked: {
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    opacity: 0.7,
+  },
+  quickAccessIconContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  quickAccessText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1A2C3E',
+  },
+  quickAccessLock: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    marginHorizontal: 20,
+    marginVertical: 16,
+    padding: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  tipImage: {
+    width: 56,
+    height: 56,
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D97706',
+    marginBottom: 4,
+  },
+  tipText: {
+    fontSize: 12,
+    color: '#4A5C6E',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
 });

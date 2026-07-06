@@ -180,7 +180,7 @@ export default function SplashScreen() {
     }, 3200);
 
     let t5 = setTimeout(() => {
-      router.replace('/login');
+      router.replace('/onboarding');
     }, 4200);
 
     return () => {
