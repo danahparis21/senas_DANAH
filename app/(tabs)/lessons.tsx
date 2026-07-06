@@ -18,6 +18,7 @@ import { useRouter, Href } from 'expo-router';
 import { Image } from 'expo-image';
 import Svg, { Path, Circle, Rect, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 import {
   CheckIcon,
   LockIcon,
@@ -28,6 +29,7 @@ import {
   GreetingIcon,
   FlameIcon
 } from '../../components/ui/icons';
+import { AppState } from 'react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -45,6 +47,9 @@ const CHARACTERS = {
   flora: require('../../assets/images/new_characters/flora.png'),
   catto: require('../../assets/images/new_characters/catto.png'),
 };
+
+// ── BACKGROUND MUSIC ────────────────────────────────────────────────
+const BACKGROUND_MUSIC = require('../../assets/music/happy-bg.mp3');
 
 // ── CHARACTER COLOR PALETTE ──────────────────────────────────────────
 const COLORS = {
@@ -333,6 +338,10 @@ export default function Lessons() {
   const [teacherLessons, setTeacherLessons] = useState<any[]>([]);
   const [loadingTeacher, setLoadingTeacher] = useState<boolean>(false);
 
+  // Audio state
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isMusicPlaying, setIsMusicPlaying] = useState<boolean>(false);
+
   // Character rotation
   const [currentCharacter, setCurrentCharacter] = useState<keyof typeof CHARACTER_MESSAGES>('senya');
   const [characterMessage, setCharacterMessage] = useState<string>('');
@@ -348,6 +357,100 @@ export default function Lessons() {
   const cloud2Anim = useRef(new Animated.Value(screenWidth + 200)).current;
   const cloud3Anim = useRef(new Animated.Value(-250)).current;
   const cloud4Anim = useRef(new Animated.Value(screenWidth + 250)).current;
+
+  // ── BACKGROUND MUSIC SETUP ──────────────────────────────────────────
+  async function playBackgroundMusic() {
+    try {
+      // Unload any existing sound
+      if (sound) {
+        await sound.unloadAsync();
+      }
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        BACKGROUND_MUSIC,
+        {
+          shouldPlay: true,
+          isLooping: true,
+          volume: 0.5, // Set to 50% volume for background ambience
+        }
+      );
+
+      setSound(newSound);
+      setIsMusicPlaying(true);
+
+      // Handle when playback finishes (shouldn't happen with looping, but just in case)
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          newSound.replayAsync();
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to load background music:', error);
+    }
+  }
+
+  async function stopBackgroundMusic() {
+    if (sound) {
+      try {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+        setSound(null);
+        setIsMusicPlaying(false);
+      } catch (error) {
+        console.error('Failed to stop background music:', error);
+      }
+    }
+  }
+
+  async function toggleMusic() {
+    if (isMusicPlaying) {
+      await stopBackgroundMusic();
+    } else {
+      await playBackgroundMusic();
+    }
+  }
+
+  // ── AUDIO SETUP FOR IOS ─────────────────────────────────────────────
+  useEffect(() => {
+    // Configure audio mode for background playback
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    });
+
+    // Start playing music when component mounts
+    playBackgroundMusic();
+
+    // Cleanup when component unmounts
+    return () => {
+      stopBackgroundMusic();
+    };
+  }, []);
+
+  // ── PAUSE MUSIC WHEN APP GOES TO BACKGROUND ──────────────────────
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background') {
+        // Pause music when app goes to background
+        if (sound && isMusicPlaying) {
+          sound.pauseAsync();
+        }
+      } else if (nextAppState === 'active') {
+        // Resume music when app comes to foreground
+        if (sound && !isMusicPlaying) {
+          sound.playAsync();
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [sound, isMusicPlaying]);
 
   // Sun glow animation
   useEffect(() => {
@@ -679,10 +782,21 @@ export default function Lessons() {
           </Animated.View>
         </View>
 
-        {/* Top Bar */}
+        {/* Top Bar with Music Toggle */}
         <View style={styles.topBar}>
           <Text style={styles.logoText}>SEÑAS</Text>
           <View style={styles.topBarRight}>
+            <Pressable
+              onPress={toggleMusic}
+              style={({ pressed }) => [
+                styles.musicButton,
+                { opacity: pressed ? 0.6 : 1 }
+              ]}
+            >
+              <Text style={styles.musicButtonText}>
+                {isMusicPlaying ? '🔊' : '🔇'}
+              </Text>
+            </Pressable>
             <View style={styles.xpTopBadge}>
               <Text style={styles.xpTopText}>⚡ {xp} XP</Text>
             </View>
@@ -1030,6 +1144,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  musicButton: {
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  musicButtonText: {
+    fontSize: 16,
   },
   xpTopBadge: {
     backgroundColor: 'rgba(255,255,255,0.85)',

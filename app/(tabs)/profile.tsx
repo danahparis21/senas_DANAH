@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView,
   Pressable, Switch, Modal, TextInput, ActivityIndicator,
-  Dimensions, Animated, Easing, StatusBar,
+  Dimensions, Animated, Easing, StatusBar, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -29,6 +29,15 @@ const INK = '#1A2C3E';            // dark ink for headings
 const INK_SOFT = '#4A5C6E';       // secondary ink
 const CARD_BG = 'rgba(255,255,255,0.85)';
 const CARD_BORDER = 'rgba(255,255,255,0.9)';
+
+// ── Character Options ──────────────────────────────────────────────────
+const CHARACTERS = [
+  { id: 'senya', name: 'Senya', image: require('../../assets/images/new_characters/senya.png') },
+  { id: 'boy', name: 'Boy', image: require('../../assets/images/new_characters/boy.png') },
+  { id: 'girl', name: 'Girl', image: require('../../assets/images/new_characters/girl.png') },
+  { id: 'flora', name: 'Flora', image: require('../../assets/images/new_characters/flora.png') },
+  { id: 'catto', name: 'Catto', image: require('../../assets/images/new_characters/catto.png') },
+];
 
 // ── ANIMATED CLOUD (unchanged from onboarding) ───────────────────────
 function AnimatedCloud({ scale = 1, opacity = 0.4 }) {
@@ -169,17 +178,87 @@ function SignOutModal({ visible, onClose, onConfirm }: {
   );
 }
 
+// ── Character Selection Modal ──────────────────────────────────────
+function CharacterSelectModal({ visible, onClose, selectedCharacter, onSelectCharacter }: {
+  visible: boolean;
+  onClose: () => void;
+  selectedCharacter: string;
+  onSelectCharacter: (charId: string) => void;
+}) {
+
+
+  if (!visible) return null;
+
+  return (
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 1000 }]}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.characterModal}>
+          <View style={styles.editModalHeader}>
+            <Text style={styles.editModalTitle}>Choose Your Character</Text>
+            <Pressable style={styles.closeBtn} onPress={onClose}>
+              <Text style={styles.closeBtnText}>✕</Text>
+            </Pressable>
+          </View>
+
+          <FlatList
+            data={CHARACTERS}
+            keyExtractor={(item) => item.id}
+            numColumns={3}
+            contentContainerStyle={styles.characterGrid}
+            renderItem={({ item }) => (
+              <Pressable
+                style={[
+                  styles.characterOption,
+                  selectedCharacter === item.id && styles.characterOptionSelected,
+                ]}
+                onPress={() => {
+                  console.log('Selected character:', item.id);
+                  onSelectCharacter(item.id);
+                }}
+              >
+                <Image
+                  source={item.image}
+                  style={styles.characterOptionImage}
+                  contentFit="contain"
+                />
+                <Text style={[
+                  styles.characterOptionName,
+                  selectedCharacter === item.id && styles.characterOptionNameSelected,
+                ]}>
+                  {item.name}
+                </Text>
+                {selectedCharacter === item.id && (
+                  <View style={styles.characterCheckmark}>
+                    <Text style={styles.characterCheckmarkText}>✓</Text>
+                  </View>
+                )}
+              </Pressable>
+            )}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ── Edit Profile Modal ───────────────────────────────────────────────
-function EditProfileModal({ visible, onClose, userName, onSave }: {
-  visible: boolean; onClose: () => void; userName: string; onSave: (name: string) => void;
+function EditProfileModal({ visible, onClose, userName, onSave, selectedCharacter, onSelectCharacter }: {
+  visible: boolean;
+  onClose: () => void;
+  userName: string;
+  onSave: (name: string) => void;
+  selectedCharacter: string;
+  onSelectCharacter: (charId: string) => void;
 }) {
   const [name, setName] = useState(userName);
   const [showBadges, setShowBadges] = useState(true);
+  const [showCharacterSelect, setShowCharacterSelect] = useState(false);
+  const currentChar = CHARACTERS.find(c => c.id === selectedCharacter) || CHARACTERS[0];
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.editModal} onPress={e => e.stopPropagation()}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.editModal}>
           <View style={styles.editModalHeader}>
             <Text style={styles.editModalTitle}>Edit Profile</Text>
             <Pressable style={styles.closeBtn} onPress={onClose}>
@@ -188,16 +267,25 @@ function EditProfileModal({ visible, onClose, userName, onSave }: {
           </View>
 
           <View style={styles.avatarEditCenter}>
-            <View style={styles.avatarEditRing}>
-              <Image
-                source={require('../../assets/images/new_characters/senya.png')}
-                style={styles.avatarEditImg}
-                contentFit="cover"
-              />
-            </View>
-            <Pressable style={styles.changePicBtn}>
-              <Text style={styles.changePicText}>Change Avatar</Text>
+            <Pressable
+              onPress={() => {
+
+                setShowCharacterSelect(true);
+              }}
+              style={styles.avatarEditPressable}
+            >
+              <View style={styles.avatarEditRing}>
+                <Image
+                  source={currentChar.image}
+                  style={styles.avatarEditImg}
+                  contentFit="cover"
+                />
+              </View>
+              <View style={styles.changeCharacterBadge}>
+                <Text style={styles.changeCharacterBadgeText}>Change</Text>
+              </View>
             </Pressable>
+            <Text style={styles.currentCharacterName}>{currentChar.name}</Text>
           </View>
 
           <View style={styles.fieldBlock}>
@@ -233,8 +321,17 @@ function EditProfileModal({ visible, onClose, userName, onSave }: {
               <Text style={styles.saveBtnText}>Save Changes</Text>
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
+      <CharacterSelectModal
+        visible={showCharacterSelect}
+        onClose={() => setShowCharacterSelect(false)}
+        selectedCharacter={selectedCharacter}
+        onSelectCharacter={(charId) => {
+          onSelectCharacter(charId);
+          setShowCharacterSelect(false);
+        }}
+      />
     </Modal>
   );
 }
@@ -267,6 +364,7 @@ export default function Profile() {
   const [totalBadges, setTotalBadges] = useState(0);
   const [progressData, setProgressData] = useState<{ name: string, pct: number, color: string }[]>([]);
   const [recentBadges, setRecentBadges] = useState<{ src: any, label: string, earned?: boolean }[]>([]);
+  const [selectedCharacter, setSelectedCharacter] = useState('senya');
 
   const [notifs, setNotifs] = useState(true);
   const [sound, setSound] = useState(true);
@@ -335,6 +433,10 @@ export default function Profile() {
         setStudentLevel(student?.fsl_mastery_level || 'Beginner');
         setTotalXp(student?.total_xp || MOCK_PROFILE_DATA.student.total_xp);
         setStreakDays(student?.streak_days || MOCK_PROFILE_DATA.student.streak_days);
+        // Load saved character preference
+        if (student?.character) {
+          setSelectedCharacter(student.character);
+        }
         useMockData(student?.total_xp || MOCK_PROFILE_DATA.student.total_xp);
       } else {
         useMockData(MOCK_PROFILE_DATA.student.total_xp);
@@ -345,6 +447,7 @@ export default function Profile() {
             fsl_mastery_level: MOCK_PROFILE_DATA.user.fsl_mastery_level,
             total_xp: MOCK_PROFILE_DATA.student.total_xp,
             streak_days: MOCK_PROFILE_DATA.student.streak_days,
+            character: 'senya',
           },
         };
         await AsyncStorage.setItem('userData', JSON.stringify(defaultUser));
@@ -396,6 +499,21 @@ export default function Profile() {
     setRecentBadges(badgeData.map(b => ({ ...b, earned: xp >= b.xp })));
   };
 
+  const handleCharacterSelect = async (charId: string) => {
+    setSelectedCharacter(charId);
+    // Save character preference
+    try {
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const user = JSON.parse(userData);
+        user.student.character = charId;
+        await AsyncStorage.setItem('userData', JSON.stringify(user));
+      }
+    } catch (e) {
+      console.error('Error saving character preference:', e);
+    }
+  };
+
   // XP progression (level = 100 XP per level, purely visual)
   const level = Math.max(1, Math.floor(totalXp / 100) + 1);
   const xpInLevel = totalXp % 100;
@@ -408,6 +526,8 @@ export default function Profile() {
     { label: 'Streak', value: `${streakDays}d`, icon: require('../../assets/images/img/streak.png'), color: '#EF4444' },
     { label: 'Badges', value: totalBadges.toString(), icon: require('../../assets/images/img/badges.png'), color: '#8B5CF6' },
   ];
+
+  const currentCharacter = CHARACTERS.find(c => c.id === selectedCharacter) || CHARACTERS[0];
 
   if (loading) {
     return (
@@ -468,6 +588,8 @@ export default function Profile() {
           onClose={() => setShowEditModal(false)}
           userName={userName}
           onSave={setUserName}
+          selectedCharacter={selectedCharacter}
+          onSelectCharacter={handleCharacterSelect}
         />
         <SignOutModal
           visible={showSignOutModal}
@@ -494,7 +616,7 @@ export default function Profile() {
             <View style={styles.avatarSlot}>
               <Animated.View style={{ transform: [{ translateY: floatY }] }}>
                 <Image
-                  source={require('../../assets/images/new_characters/senya.png')}
+                  source={currentCharacter.image}
                   style={styles.heroAvatar}
                   contentFit="contain"
                 />
@@ -821,10 +943,31 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 17, fontWeight: '800', color: INK },
   statLabel: { fontSize: 10, color: INK_SOFT, fontWeight: '700' },
 
-  // Sections
-  section: { paddingHorizontal: 16, marginTop: 22 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 },
-  sectionTitle: { fontSize: 17, fontWeight: '800', color: INK },
+  // Sections - IMPROVED SPACING
+  section: {
+    paddingHorizontal: 16,
+    marginTop: 30,
+    marginBottom: 4, // Add this to give space below the section container
+  },
+  sectionFirst: {
+    paddingHorizontal: 16,
+    marginTop: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 16, // Increased from 14 to give more space between title and card
+    paddingHorizontal: 4, // Add slight horizontal padding
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: INK,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+    paddingBottom: 10,
+  },
   sectionCount: { fontSize: 12, fontWeight: '700', color: INK_SOFT },
 
   // Achievements
@@ -849,13 +992,20 @@ const styles = StyleSheet.create({
   badgeCheckMark: { color: '#fff', fontSize: 12, fontWeight: '900', marginTop: -1 },
   badgeCardLabel: { fontSize: 11, fontWeight: '700', color: INK, textAlign: 'center' },
 
-  // Glass card
+  // Glass card - IMPROVED
+
   glassCard: {
     backgroundColor: CARD_BG,
-    borderWidth: 1, borderColor: CARD_BORDER,
-    borderRadius: 22, padding: 18,
-    shadowColor: '#0F3172', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10, shadowRadius: 16, elevation: 4,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    borderRadius: 24,
+    padding: 20,
+    paddingTop: 18, // Slightly less top padding since we have more space above
+    shadowColor: '#0F3172',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 4,
   },
 
   // Learning path
@@ -864,16 +1014,41 @@ const styles = StyleSheet.create({
   pathInfo: { flex: 1 },
   pathLabel: { fontSize: 11, color: INK_SOFT, fontWeight: '600' },
   pathValue: { fontSize: 15, fontWeight: '800', color: INK, marginTop: 2 },
-  divider: { height: 1, backgroundColor: 'rgba(15,49,114,0.08)', marginVertical: 12 },
+  divider: { height: 1, backgroundColor: 'rgba(15,49,114,0.08)', marginVertical: 14 }, // Increased from 12
 
-  // Progress
-  progressItem: { paddingBottom: 14, marginBottom: 14 },
-  progressItemBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(15,49,114,0.08)' },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressName: { fontSize: 13, fontWeight: '700', color: INK },
-  progressPct: { fontSize: 12, fontWeight: '800' },
-  progressTrack: { backgroundColor: 'rgba(15,49,114,0.10)', borderRadius: 99, height: 6, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 99 },
+  // Progress - IMPROVED
+  progressItem: {
+    paddingBottom: 16, // Increased from 14
+    marginBottom: 16, // Increased from 14
+  },
+  progressItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(15,49,114,0.08)'
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8, // Increased from 6
+  },
+  progressName: {
+    fontSize: 14, // Slightly larger
+    fontWeight: '700',
+    color: INK
+  },
+  progressPct: {
+    fontSize: 13, // Slightly larger
+    fontWeight: '800'
+  },
+  progressTrack: {
+    backgroundColor: 'rgba(15,49,114,0.10)',
+    borderRadius: 99,
+    height: 8, // Increased from 6
+    overflow: 'hidden'
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 99
+  },
 
   // Settings & Account
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 18 },
@@ -935,7 +1110,8 @@ const styles = StyleSheet.create({
   editModalTitle: { fontSize: 20, fontWeight: '800', color: INK },
   closeBtn: { width: 32, height: 32, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
   closeBtnText: { fontSize: 16, color: INK_SOFT },
-  avatarEditCenter: { alignItems: 'center', marginBottom: 24, gap: 12 },
+  avatarEditCenter: { alignItems: 'center', marginBottom: 24, gap: 8 },
+  avatarEditPressable: { position: 'relative' },
   avatarEditRing: {
     width: 100, height: 100, borderRadius: 50,
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.5)',
@@ -943,12 +1119,22 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 8,
   },
   avatarEditImg: { width: '100%', height: '100%' },
-  changePicBtn: {
-    backgroundColor: ACCENT_SOFT,
-    borderWidth: 1, borderColor: 'rgba(46,127,232,0.3)',
-    borderRadius: 40, paddingVertical: 8, paddingHorizontal: 16,
+  changeCharacterBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    backgroundColor: ACCENT,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 2, borderColor: '#fff',
   },
-  changePicText: { fontSize: 12, fontWeight: '700', color: ACCENT },
+  changeCharacterBadgeText: {
+    color: '#fff', fontSize: 10, fontWeight: '700',
+  },
+  currentCharacterName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: INK,
+    marginTop: 4,
+  },
   fieldBlock: { marginBottom: 20 },
   fieldLabel: { fontSize: 13, fontWeight: '700', color: INK, marginBottom: 6 },
   fieldInput: {
@@ -977,4 +1163,66 @@ const styles = StyleSheet.create({
     shadowColor: ACCENT, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 8,
   },
   saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+
+  // Character Selection Modal
+  characterModal: {
+    width: '92%', maxWidth: 400,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 32, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.2, shadowRadius: 40, elevation: 24,
+    maxHeight: '80%',
+  },
+  characterGrid: {
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  characterOption: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    margin: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    minHeight: 110,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  characterOptionSelected: {
+    borderColor: ACCENT,
+    backgroundColor: ACCENT_SOFT,
+  },
+  characterOptionImage: {
+    width: 60,
+    height: 60,
+    marginBottom: 6,
+  },
+  characterOptionName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: INK_SOFT,
+  },
+  characterOptionNameSelected: {
+    color: ACCENT,
+    fontWeight: '700',
+  },
+  characterCheckmark: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: ACCENT,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  characterCheckmarkText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
 });

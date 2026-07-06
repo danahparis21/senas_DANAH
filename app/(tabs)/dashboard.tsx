@@ -10,7 +10,8 @@ import {
   ActivityIndicator,
   FlatList,
   Dimensions,
-  Animated
+  Animated,
+  Easing,
 } from 'react-native';
 import { useRouter, Href } from 'expo-router';
 import { Image } from 'expo-image';
@@ -18,7 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line, Polyline, Rect, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // ── CHARACTER COLOR PALETTE ──────────────────────────────────────────
 const COLORS = {
@@ -148,6 +149,24 @@ function FlameIcon({ size = 16, color = '#F59E0B' }) {
   );
 }
 
+// ── ANIMATED CLOUD ────────────────────────────────────────────────────
+function AnimatedCloud({ scale = 1, opacity = 0.4 }) {
+  return (
+    <Svg width={120 * scale} height={60 * scale} viewBox="0 0 120 60" opacity={opacity}>
+      <Defs>
+        <SvgLinearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
+          <Stop offset="100%" stopColor="#E0F2FE" stopOpacity="0.5" />
+        </SvgLinearGradient>
+      </Defs>
+      <Path
+        d="M20 40 C10 40 5 30 12 22 C8 12 20 5 30 10 C38 2 52 2 60 8 C68 3 80 5 85 14 C95 12 105 18 100 28 C110 35 108 48 95 50 L25 50 C18 50 14 45 20 40Z"
+        fill="url(#cloudGrad)"
+      />
+    </Svg>
+  );
+}
+
 // ── MOCK DATA ──────────────────────────────────────────────────────────
 const MOCK_TEACHER_LESSONS = [
   {
@@ -260,45 +279,76 @@ export default function Dashboard() {
   const [xp, setXp] = useState(340);
   const [xpMax, setXpMax] = useState(500);
   const [streak, setStreak] = useState(5);
-  const [teacherLessons, setTeacherLessons] = useState<Lesson[]>([]);
-  const [loadingLessons, setLoadingLessons] = useState(true);
+  const [teacherLessons] = useState<Lesson[]>(MOCK_TEACHER_LESSONS);
   const [motivationalMessage, setMotivationalMessage] = useState('');
   const flatListRef = useRef<FlatList>(null);
+
+  // ── Sky Animations ──
+  const cloud1Anim = useRef(new Animated.Value(-200)).current;
+  const cloud2Anim = useRef(new Animated.Value(screenWidth + 200)).current;
+  const cloud3Anim = useRef(new Animated.Value(-250)).current;
+  const sunAnim = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     setMotivationalMessage(getMotivationalMessage());
     fetchStudentData();
-    fetchTeacherLessons();
+
+    // Cloud animations
+    const loop = (anim: Animated.Value, from: number, to: number, dur: number) => {
+      const run = () => {
+        anim.setValue(from);
+        Animated.timing(anim, { toValue: to, duration: dur, easing: Easing.linear, useNativeDriver: true })
+          .start(() => run());
+      };
+      run();
+    };
+    loop(cloud1Anim, -200, screenWidth + 200, 45000);
+    loop(cloud2Anim, screenWidth + 200, -200, 55000);
+    loop(cloud3Anim, -250, screenWidth + 250, 50000);
+
+    // Sun glow animation
+    Animated.loop(Animated.sequence([
+      Animated.timing(sunAnim, { toValue: 1, duration: 3000, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      Animated.timing(sunAnim, { toValue: 0, duration: 3000, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+    ])).start();
+
+    // Float animation for Senya
+    Animated.loop(Animated.sequence([
+      Animated.timing(floatAnim, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(floatAnim, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ])).start();
   }, []);
+
+  const sunGlow = sunAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.75] });
+  const floatY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
 
   const fetchStudentData = async () => {
     try {
-      setLoading(true);
       const userData = await AsyncStorage.getItem('userData');
       if (userData) {
         const user = JSON.parse(userData);
         const student = user.student;
-        setStudentName(`${student?.first_name || 'John'} ${student?.last_name || 'Doe'}`.trim());
+        const fullName = `${student?.first_name || ''} ${student?.last_name || ''}`.trim();
+        setStudentName(fullName || 'Student');
         setStudentLevel(student?.fsl_mastery_level || 'Beginner');
         setXp(student?.total_xp || 340);
         setStreak(student?.streak_days || 5);
+
+        const levelXpMap: Record<number, number> = {
+          1: 100,
+          2: 250,
+          3: 500,
+          4: 800,
+          5: 1200,
+        };
+        const maxXp = levelXpMap[student?.level || 1] || 100;
+        setXpMax(maxXp);
       }
     } catch (error) {
       console.error('Error fetching student data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchTeacherLessons = async () => {
-    try {
-      setLoadingLessons(true);
-      await new Promise(resolve => setTimeout(resolve, 600));
-      setTeacherLessons(MOCK_TEACHER_LESSONS);
-    } catch (error) {
-      console.error('Error fetching teacher lessons:', error);
-    } finally {
-      setLoadingLessons(false);
     }
   };
 
@@ -320,12 +370,48 @@ export default function Dashboard() {
   }
 
   return (
-    <LinearGradient
-      colors={[GRADIENT.start, GRADIENT.mid, GRADIENT.mid2, GRADIENT.end]}
-      locations={[0, 0.25, 0.55, 1]}
-      style={{ flex: 1 }}
-    >
-      <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {/* ── Sky Gradient Background ── */}
+      <View style={StyleSheet.absoluteFillObject}>
+        <Svg width={screenWidth} height={screenHeight}>
+          <Defs>
+            <SvgLinearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor={GRADIENT.start} stopOpacity="1" />
+              <Stop offset="35%" stopColor={GRADIENT.mid} stopOpacity="0.9" />
+              <Stop offset="70%" stopColor={GRADIENT.mid2} stopOpacity="0.85" />
+              <Stop offset="100%" stopColor={GRADIENT.end} stopOpacity="0.95" />
+            </SvgLinearGradient>
+          </Defs>
+          <Rect width={screenWidth} height={screenHeight} fill="url(#bgGrad)" />
+        </Svg>
+      </View>
+
+      {/* ── Sun with Glow ── */}
+      <Animated.View style={[styles.sunContainer, { opacity: sunGlow }]} pointerEvents="none">
+        <Svg width="120" height="120" viewBox="0 0 120 120">
+          <Circle cx="60" cy="60" r="45" fill="#FCD34D" opacity="0.9" />
+          <Circle cx="60" cy="60" r="55" fill="#FCD34D" opacity="0.3" />
+          <Circle cx="60" cy="60" r="70" fill="#FCD34D" opacity="0.1" />
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((a, i) => (
+            <Rect key={i} x="54" y="5" width="12" height="20" rx="6" fill="#FCD34D" opacity="0.6" transform={`rotate(${a}, 60, 60)`} />
+          ))}
+        </Svg>
+      </Animated.View>
+
+      {/* ── Floating Clouds ── */}
+      <View style={styles.floatingSky} pointerEvents="none">
+        <Animated.View style={[styles.cloudWrapper, { top: 60, transform: [{ translateX: cloud1Anim }] }]}>
+          <AnimatedCloud scale={1.5} opacity={0.4} />
+        </Animated.View>
+        <Animated.View style={[styles.cloudWrapper, { top: 200, transform: [{ translateX: cloud2Anim }] }]}>
+          <AnimatedCloud scale={1.2} opacity={0.3} />
+        </Animated.View>
+        <Animated.View style={[styles.cloudWrapper, { top: 380, transform: [{ translateX: cloud3Anim }] }]}>
+          <AnimatedCloud scale={1.7} opacity={0.32} />
+        </Animated.View>
+      </View>
+
+      <SafeAreaView style={styles.safeArea}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -339,7 +425,7 @@ export default function Dashboard() {
             </View>
           </View>
 
-          {/* Hero Greeting Card with Senya + Speech Bubble - FIXED POSITION */}
+          {/* Hero Greeting Card with Senya */}
           <View style={styles.heroCard}>
             <View style={styles.heroContent}>
               <View style={styles.heroText}>
@@ -356,14 +442,16 @@ export default function Dashboard() {
                   </View>
                 </View>
               </View>
-              <Image
-                source={require('../../assets/images/new_characters/senya.png')}
-                style={styles.senyaHero}
-                contentFit="contain"
-              />
+              <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+                <Image
+                  source={require('../../assets/images/new_characters/senya.png')}
+                  style={styles.senyaHero}
+                  contentFit="contain"
+                />
+              </Animated.View>
             </View>
 
-            {/* Speech Bubble moved to below the hero content - smaller and more compact */}
+            {/* Speech Bubble */}
             <View style={styles.speechBubbleContainer}>
               <View style={styles.speechBubble}>
                 <Text style={styles.speechBubbleText}>{motivationalMessage}</Text>
@@ -382,18 +470,15 @@ export default function Dashboard() {
             </View>
           </View>
 
-          {/* Daily Challenge - FIXED: proper gradient fill */}
+          {/* Daily Challenge */}
           <View style={styles.section}>
             <Pressable style={styles.dailyCard} onPress={() => router.push('/assessment' as Href)}>
-              {/* Gradient Background - properly fills the card */}
               <LinearGradient
                 colors={['#FFD700', '#F7C500', '#FB923C']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.dailyGradient}
               />
-
-              {/* Decorative circles */}
               <View style={styles.dailyCardBg1} />
               <View style={styles.dailyCardBg2} />
 
@@ -451,7 +536,7 @@ export default function Dashboard() {
           </View>
 
           {/* Teacher Lessons */}
-          {!loadingLessons && teacherLessons.length > 0 && (
+          {teacherLessons.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionHeaderLeft}>
@@ -459,7 +544,7 @@ export default function Dashboard() {
                   <Text style={styles.sectionTitle}>From Teacher</Text>
                 </View>
                 {teacherLessons.length > 2 && (
-                  <Pressable onPress={() => router.push('/teacher-lessons' as Href)}>
+                  <Pressable onPress={() => router.push('/lessons' as Href)}>
                     <Text style={styles.seeAllText}>See All →</Text>
                   </Pressable>
                 )}
@@ -645,26 +730,32 @@ export default function Dashboard() {
 
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 // ── STYLES ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
+  safeArea: { flex: 1 },
   scrollContent: { paddingBottom: 120 },
   loadingContainer: { alignItems: 'center', justifyContent: 'center' },
-  loadingBox: { width: 48, height: 48, borderRadius: 16, backgroundColor: COLORS.senyaYellowGlow, alignItems: 'center', justifyContent: 'center' },
+  loadingBox: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(255,215,0,0.20)', alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, fontSize: 13, fontWeight: '700', color: COLORS.textLight },
 
+  // Sky
+  sunContainer: { position: 'absolute', top: 20, right: -10, zIndex: 0 },
+  floatingSky: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0, overflow: 'hidden' },
+  cloudWrapper: { position: 'absolute', left: 0 },
+
   // Top Bar
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, zIndex: 1 },
   logoText: { color: COLORS.textDark, fontSize: 22, fontWeight: '800', letterSpacing: 2 },
   streakBadge: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
   streakText: { color: COLORS.textDark, fontSize: 13, fontWeight: '700' },
 
   // Hero Card
-  heroCard: { marginHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 28, padding: 20, shadowColor: '#2E7FE8', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.10, shadowRadius: 24, elevation: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
+  heroCard: { marginHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 28, padding: 20, shadowColor: '#2E7FE8', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.10, shadowRadius: 24, elevation: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', zIndex: 1 },
   heroContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heroText: { flex: 1, paddingRight: 12 },
   greetingText: { color: COLORS.textMedium, fontSize: 13, fontWeight: '600' },
@@ -674,53 +765,24 @@ const styles = StyleSheet.create({
   heroBadgeText: { fontSize: 11, fontWeight: '700' },
   senyaHero: { width: 80, height: 80 },
 
-  // Speech Bubble - moved below hero content
+  // Speech Bubble
   speechBubbleContainer: { marginTop: 6, marginBottom: 2, alignItems: 'center' },
-  speechBubble: {
-    backgroundColor: COLORS.senyaYellowGlow,
-    borderRadius: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,215,0,0.4)',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 6,
-    elevation: 2,
-  },
+  speechBubble: { backgroundColor: 'rgba(255,215,0,0.20)', borderRadius: 14, paddingVertical: 6, paddingHorizontal: 16, borderWidth: 1.5, borderColor: 'rgba(255,215,0,0.4)', shadowColor: '#FFD700', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 6, elevation: 2 },
   speechBubbleText: { fontSize: 12, fontWeight: '600', color: COLORS.textDark, textAlign: 'center' },
 
+  // XP Section
   xpSection: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
   xpHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   xpLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textMedium },
   xpPercent: { fontSize: 11, fontWeight: '700', color: COLORS.textMedium },
-  xpProgressTrack: { backgroundColor: COLORS.senyaBlueGlow, borderRadius: 99, height: 6, overflow: 'hidden' },
+  xpProgressTrack: { backgroundColor: 'rgba(46,127,232,0.12)', borderRadius: 99, height: 6, overflow: 'hidden' },
   xpProgressFill: { height: '100%', borderRadius: 99 },
   xpStatus: { fontSize: 10, color: COLORS.textLight, fontWeight: '500', marginTop: 4 },
 
-  // Daily Challenge - FIXED
-  section: { marginHorizontal: 16, marginTop: 16 },
-  dailyCard: {
-    borderRadius: 24,
-    padding: 20,
-    overflow: 'hidden',
-    shadowColor: '#F7C500',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 8,
-    minHeight: 150,
-    position: 'relative',
-  },
-  dailyGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 24,
-  },
+  // Daily Challenge
+  section: { marginHorizontal: 16, marginTop: 16, zIndex: 1 },
+  dailyCard: { borderRadius: 24, padding: 20, overflow: 'hidden', shadowColor: '#F7C500', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 20, elevation: 8, minHeight: 150, position: 'relative' },
+  dailyGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24 },
   dailyCardBg1: { position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.12)', zIndex: 1 },
   dailyCardBg2: { position: 'absolute', bottom: -10, left: -10, width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.08)', zIndex: 1 },
   dailyHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, zIndex: 2 },
